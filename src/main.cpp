@@ -2,12 +2,12 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <WebSocketsClient.h>
-#include <ArduinoOTA.h>      // OTA Update
-#include <ESPmDNS.h>         // mDNS hostname
+#include <ArduinoOTA.h>
+#include <ESPmDNS.h>
 
 const char* WIFI_SSID = "My_Home_2";
 const char* WIFI_PASSWORD = "myhome1905";
-const char* SERVER_HOST = "192.168.1.16";
+const char* SERVER_HOST = "vps.nanasgunung.com";
 const int SERVER_PORT = 3000;
 const char* WS_PATH = "/ws";
 
@@ -37,9 +37,9 @@ void sendWaterFullAlert();
 void buzzerAlert(int times);
 int readSensorRealtime();
 void printStatusInfo();
-void setupOTA();           // OTA Update setup
-void printOTAInfo();       // OTA info display
-void setupMDNS();          // mDNS hostname setup
+void setupOTA();
+void setupMDNS();
+void printOTAInfo();
 
 void connectWiFi() {
   Serial.print("Connecting to WiFi");
@@ -64,15 +64,10 @@ void setupMDNS() {
   
   if (MDNS.begin(OTA_HOSTNAME)) {
     Serial.printf("✅ mDNS started: %s.local\n", OTA_HOSTNAME);
-    
-    // Add services
     MDNS.addService("http", "tcp", 80);
-    MDNS.addService("arduino", "tcp", 3232);
-    
     Serial.println("✅ mDNS services advertised");
   } else {
     Serial.println("❌ mDNS failed to start!");
-    Serial.println("   Fallback: gunakan IP address lansung di platformio.ini");
   }
 }
 
@@ -86,8 +81,6 @@ void setupOTA() {
   ArduinoOTA.onStart([]() {
     String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
     Serial.printf("\n⬆️  OTA Update started: %s\n", type.c_str());
-    
-    // Safety: matikan pompa saat OTA update
     digitalWrite(RELAY_PIN, HIGH);
     pumpState = false;
     Serial.println("🛡️  Pump disabled for safety during OTA");
@@ -117,14 +110,14 @@ void setupOTA() {
     } else if (error == OTA_END_ERROR) {
       Serial.println("End Failed");
     }
-    buzzerAlert(5);  // 5x beep error alert
+    buzzerAlert(5);
   });
   
   ArduinoOTA.begin();
   Serial.printf("✅ OTA Ready!\n\n");
 }
 
-// Print OTA info for troubleshooting
+// Print OTA info
 void printOTAInfo() {
   Serial.println("\n═══════════════════════════════════════════");
   Serial.println("🔄 OTA UPDATE INFO");
@@ -133,12 +126,8 @@ void printOTAInfo() {
   Serial.printf("  IP Address: %s\n", WiFi.localIP().toString().c_str());
   Serial.printf("  Password: %s\n", OTA_PASSWORD);
   Serial.printf("  WiFi Signal: %d dBm\n", WiFi.RSSI());
-  Serial.println("\n📋 PlatformIO Upload (choose one):");
-  Serial.printf("  Option 1 (recommended): upload_port = %s.local\n", OTA_HOSTNAME);
-  Serial.printf("  Option 2 (fallback):    upload_port = %s\n", 
-    WiFi.localIP().toString().c_str());
-  Serial.println("\n🔧 Configuration in platformio.ini:");
-  Serial.println("  upload_protocol = espota");
+  Serial.println("\n📋 PlatformIO Upload:");
+  Serial.printf("  upload_port = %s.local\n", OTA_HOSTNAME);
   Serial.printf("  upload_flags = --auth=%s\n", OTA_PASSWORD);
   Serial.println("═══════════════════════════════════════════\n");
 }
@@ -181,7 +170,6 @@ void printStatusInfo() {
   // ESP32 Info
   Serial.println("\n🔧 ESP32 INFO:");
   Serial.printf("  IP Address: %s\n", WiFi.localIP().toString().c_str());
-  Serial.printf("  Hostname: %s.local\n", OTA_HOSTNAME);
   Serial.printf("  WiFi Signal: %d dBm\n", WiFi.RSSI());
   Serial.printf("  Uptime: %lu detik (%lu menit)\n", uptime, uptime / 60);
   Serial.printf("  Heap Memory: %u bytes\n", ESP.getFreeHeap());
@@ -249,6 +237,7 @@ void sendConfirmation(String cmd) {
   doc["type"] = "confirm";
   doc["command"] = cmd;
   doc["status"] = "success";
+  doc["ipLocal"] = WiFi.localIP().toString();
   doc["pumpState"] = pumpState;
   doc["safetyMode"] = safetyMode;
   doc["waterLevel"] = analogRead(WATER_SENSOR_PIN);
@@ -306,8 +295,6 @@ void executeCommand(String cmd) {
     Serial.println("🛑 POMPA MATI (Relay de-energized)\n");
   } else if (cmd == "status") {
     printStatusInfo();
-  } else if (cmd == "ota_info") {
-    printOTAInfo();
   } else {
     Serial.printf("⚠️  Unknown: %s\n", cmd.c_str());
     return;
@@ -357,8 +344,7 @@ void setup() {
   digitalWrite(BUZZER_PIN, LOW);
   
   Serial.println("\n🔧 Production Mode - Direct Connection");
-  Serial.printf("📌 RELAY: D%d | BUZZER: D%d | WATER: D%d\n", 
-    RELAY_PIN, BUZZER_PIN, WATER_SENSOR_PIN);
+  Serial.printf("📌 RELAY: D%d | BUZZER: D%d | WATER: D%d\n", RELAY_PIN, BUZZER_PIN, WATER_SENSOR_PIN);
   Serial.println("📌 Power: 3V3 (sisi kiri) | VIN (sisi kanan untuk water)\n");
   
   // Connect WiFi
@@ -380,7 +366,7 @@ void setup() {
   
   buzzerAlert(1);
   
-  startupTime = millis();
+  startupTime = millis();  // Record waktu startup untuk tracking uptime
   
   Serial.println("✅ System Ready!\n");
 }
